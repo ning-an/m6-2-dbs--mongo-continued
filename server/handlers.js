@@ -1,4 +1,5 @@
 const { MongoClient } = require("mongodb");
+const assert = require("assert");
 require("dotenv").config();
 
 const { MONGO_URI } = process.env;
@@ -52,4 +53,43 @@ const bookSeat = async (req, res) => {
     res.status(400).json({ status: 400, message });
   }
 };
-module.exports = { getSeats, bookSeat };
+
+const deleteBooking = async (req, res) => {
+  const seatId = req.params.id;
+  try {
+    const client = await MongoClient(MONGO_URI, options);
+    await client.connect();
+    const db = client.db("workshop2");
+    const seat = await db.collection("seats").findOne({ _id: seatId });
+    if (!seat.isBooked) {
+      throw new Error("This seat has not been booked yet!");
+    }
+    await db
+      .collection("seats")
+      .updateOne({ _id: seatId }, { $set: { isBooked: false } });
+    await db.collection("orders").deleteOne({ _id: seatId });
+    res.status(204).send();
+    client.close();
+  } catch ({ message }) {
+    res.status(404).json({ status: 404, message });
+  }
+};
+
+const updateCustomerInfo = async (req, res) => {
+  const { fullName, email, seatId } = req.body;
+  try {
+    const client = await MongoClient(MONGO_URI, options);
+    await client.connect();
+    const db = client.db("workshop2");
+    const seat = await db
+      .collection("orders")
+      .updateOne({ _id: seatId }, { $set: { fullName, email } });
+    assert.equal(1, seat.modifiedCount);
+    res.status(200).json({ status: 200, seat });
+    client.close();
+  } catch ({ message }) {
+    res.status(404).json({ status: 404, message });
+  }
+};
+
+module.exports = { getSeats, bookSeat, deleteBooking, updateCustomerInfo };
